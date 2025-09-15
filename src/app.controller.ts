@@ -8,6 +8,7 @@ import { rateLimit} from "express-rate-limit"
 import { appError } from "./utils/classError"
 import userRouter from "./modules/users/user.controller"
 import checkConnectionDb from "./DB/connectionDB"
+import postRouter from "./modules/posts/post.controller"
 
 
 const port : string | number = process.env.PORT || 5000
@@ -37,6 +38,7 @@ const bootstrap = () => {
 
 
     app.use("/user",userRouter)
+    app.use("/post",postRouter)
   
    checkConnectionDb()
 
