@@ -12,14 +12,26 @@ import { RevokeTokenRepository } from '../../DB/repositories/revokeToken.reposit
 import revokenTokenmodel from '../../DB/models/revokeToken.model';
 import { v4 as uuidv4 } from "uuid";
 import {OAuth2Client, TokenPayload} from 'google-auth-library' ;
-
+import { postRepository } from '../../DB/repositories/post.repository';
+import { PostModel } from '../../DB/models/post.model';
+import { friendRequestRepository } from '../../DB/repositories/friendRequest.repository';
+import { friendRequestModel } from '../../DB/models/friendRequest.model';
+import { Types } from 'mongoose';
+import { chatRepository } from '../../DB/repositories/chat.repository';
+import ChatModel from '../../DB/models/chat.model';
+import { GraphQLError } from 'graphql';
 
 
 class userService {
     private _userModel = new UserRepository(userModel)
     private _revokenTokenmodel = new RevokeTokenRepository(revokenTokenmodel)
+    private _postmodel = new postRepository(PostModel)
+    private _friendRequest = new friendRequestRepository(friendRequestModel)
+    private _ChatModel = new chatRepository(ChatModel)
+    
 
     constructor(){}
+    
 
 
     //==================signUp========================
@@ -41,7 +53,8 @@ class userService {
 
         //==================confirmedEmail========================
 
-confirmedEmail = async (req:Request,res:Response,next:NextFunction)=>{
+
+    confirmedEmail = async (req:Request,res:Response,next:NextFunction)=>{
 
     const {email,otp} : UV.confirmedEmailSchemaType = req.body
     const user =await this._userModel.findOne({email ,confirmed: {$exists :false}})
@@ -84,14 +97,31 @@ const jwtid = uuidv4();
     options:{  expiresIn : "1y"  ,jwtid }
     });
 
-    return res.status(201).json({message:"success",access_token,refresh_token})
+    return res.status(201).json({message:"Done",access_token,refresh_token})
 }
 
     //==================getProfile========================
 
 getProfile =async (req:Request,res:Response,next:NextFunction)=> {
-       
-    return res.status(201).json({message:"success",user:req.user})
+       const user = await this._userModel.findOne(
+      {
+        _id:req?.user?._id
+      }
+      ,undefined,
+      {
+        populate:[{
+          path:"friends"
+        }]
+      })
+
+const groups = await this._ChatModel.find({
+  filter: {
+    participants: { $in: [req?.user?._id] },
+    group: { $exists: true }
+  }
+})
+
+return res.status(201).json({ message: "success", user, groups })
 }
 
 
@@ -429,6 +459,155 @@ const jwtid = uuidv4();
 
 }
 
+
+
+
+//======================== upload =====================
+upload = async(req:Request,res:Response,next:NextFunction)=>{
+ 
+    return res.status(201).json({message:"success", file:req.file})
+
+
+}
+
+//======================== dashBoard =====================
+dashBoard = async(req:Request,res:Response,next:NextFunction)=>{
+const allUsers_Posts=await Promise.allSettled([
+   this._userModel.find({filter:{}}),
+  this._postmodel.find({filter:{}})
+   
+]) 
+    return res.status(201).json({message:"success", allUsers_Posts})
+
+
+}
+
+//======================== updateRole =====================
+updateRole = async(req:Request,res:Response,next:NextFunction)=>{
+const {userId}=req.params
+const {role:newRole}=req.body
+
+const denyRoles:RoleType[] = [newRole ,RoleType.superAdmin]
+//admin db , new admin >> array (admin)>> 
+if(req?.user?.role == RoleType.admin){
+  denyRoles.push(RoleType.admin) 
+  if(newRole == RoleType.superAdmin){
+        {throw new appError("not authorized",401)}
+
+  }
+}
+
+const user= await this._userModel.findOneAndUpdate({
+  _id:userId,
+  role:{$nin:denyRoles}
+},{
+  role:newRole
+},{
+  new:true
+})
+if(!user){
+      {throw new appError("user not found",404)}
+
+}
+
+    return res.status(201).json({message:"success",user})
+
+
+}
+
+//======================== sendRequest =====================
+sendRequest = async(req:Request,res:Response,next:NextFunction)=>{
+
+const {userId}=req.params
+
+const user= await this._userModel.findOne({_id:userId})
+if(!user){
+      {throw new appError("user not found",404)}
+}
+if(req?.user?._id == userId){
+  {throw new appError("you can't send for yourself ",400)}
+}
+
+const checkRequest= await this._friendRequest.findOne({
+  createdBy:{$in:[req?.user?._id,userId]},
+  sendTo:{$in:[req?.user?._id,userId]}
+
+})
+if(checkRequest){
+    {throw new appError("req already sent ",400)}
+}
+const createRequest= await this._friendRequest.create({
+  createdBy:req?.user?._id as unknown as Types.ObjectId,
+  sendTo:userId as unknown as Types.ObjectId
+
+})
+
+    return res.status(201).json({message:"success",createRequest})
+
+ 
+}
+
+
+//======================== acceptRequest =====================
+acceptRequest = async(req:Request,res:Response,next:NextFunction)=>{
+
+const {requestId}=req.params
+
+const checkRequest= await this._friendRequest.findOneAndUpdate({
+ _id:requestId,
+sendRequest:req?.user?._id,
+acceptedAt:{$exists:false}
+},{
+acceptedAt:new Date()
+},{
+  new:true
+})
+
+if(!checkRequest){
+  {throw new appError("req not found ",400)}
+}
+ 
+await Promise.all([
+  this._userModel.updateOne({_id:checkRequest.createdBy},{$push:{friends:checkRequest.sendTo}}),
+  this._userModel.updateOne({_id:checkRequest.sendTo},{$push:{friends:checkRequest.createdBy}})
+])
+
+
+    return res.status(201).json({message:"success"})
+
+ 
+}
+
+//====================================grapQl===================================================
+
+
+createUser =async (parent:any,args:any , context:any)=>{
+      const {fName,lName,age,email,password,gender}=args
+const user = await this._userModel.findOne({ email });
+  if (user){
+    throw new GraphQLError("email already exit",{
+      extensions:{
+        message:"email already exist",
+        statusCode:400
+      }
+    })
+  }
+  const hash = await Hash(password)
+    const otp = await generateOTP()
+    const hashOtp = await Hash(String(otp))
+    eventEmiiter.emit("sendEmail", { email,otp })
+    const newUser = await this._userModel.create
+    ({
+      fName,lName,otp:hashOtp,password:hash ,email,age,gender,
+    })
+    return newUser
+
+  }
+
+getUsers= async()=>{
+    return this._userModel.find({filter:{}})
+
+}
 
 
 

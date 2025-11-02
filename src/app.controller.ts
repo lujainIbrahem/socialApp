@@ -1,4 +1,4 @@
-import path from "path"
+import path, { resolve } from "path"
 import dotenv from "dotenv"
 dotenv.config({path:path.resolve("./config/.env")})
 import express, { NextFunction, Request, Response } from "express"
@@ -9,6 +9,10 @@ import { appError } from "./utils/classError"
 import userRouter from "./modules/users/user.controller"
 import checkConnectionDb from "./DB/connectionDB"
 import postRouter from "./modules/posts/post.controller"
+import { InitializationIo } from "./modules/gateway/gateway"
+import chatRouter from "./modules/chat/chat.controller"
+import { createHandler } from 'graphql-http/lib/use/express';
+import { schemaGQL } from "./modules/graphql/schema.gql"
 
 
 const port : string | number = process.env.PORT || 5000
@@ -37,9 +41,23 @@ const bootstrap = () => {
     })
 
 
+app.all('/graphql', createHandler({ schema:schemaGQL , context :(req)=>({req}) }));
+
+ 
     app.use("/user",userRouter)
     app.use("/post",postRouter)
-  
+    app.use("/chat",chatRouter)
+
+    /*
+    app.get("/upload/*path",async (req:Request,res:Response,next:NextFunction)=>{
+        const { path }=req.params as unknown as {path :string[]}
+        const key = path.join("/")
+        const result = await getFile({ path :key })
+        const stream = result.Body as NodeJS.ReadableStream
+        res.setHeader("Content-Type",result?.ContentType || "application/octet-stream")
+        stream.pipe(res)
+    })
+  */
    checkConnectionDb()
 
     app.use("{/*demo}",(req:Request,res:Response,next:NextFunction)=>{
@@ -50,9 +68,11 @@ const bootstrap = () => {
         return res.status(err.statusCode as unknown as number || 500 ).json({message:err.message , stack:err.stack})
     })
 
-    app.listen(port,()=>{
+  const httpServer=  app.listen(port,()=>{
         console.log(`server running in ${port}`);
     })
+    
+  InitializationIo(httpServer)
 
 }
 

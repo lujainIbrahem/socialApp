@@ -32,7 +32,7 @@ export const VerifyToken = async ({token ,signature}:{
   
 }
 
-export const GetSignature =async (tokenType:TokenType,prefix:string) => {
+export const GetSignature =async (tokenType: TokenType = TokenType.access, prefix: string ) => {
 
 if(tokenType ===TokenType.access)
     {

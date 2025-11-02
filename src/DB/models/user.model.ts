@@ -8,6 +8,7 @@ export enum GenderType {
 export enum RoleType {
     user = "user",
     admin = "admin", 
+    superAdmin="superAdmin"
 }
 
 export enum userProvider  {
@@ -35,6 +36,7 @@ export interface IUser {
   gender:GenderType,
   createdAt:Date,
   updatedAt:Date
+  friends:Types.ObjectId[]
   
 }
 
@@ -49,6 +51,7 @@ const userSchema = new mongoose.Schema<IUser>({
     return this.provider===userProvider.google? false : true}},
   address:{type:String},
   phone:{type:String},
+  friends:[{type:Types.ObjectId,ref:"User"}],
   otp:{type:String},
   image:{type:String},
   provider:{type:String, enum:userProvider, default:userProvider.system},
