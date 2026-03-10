@@ -33,12 +33,12 @@ const storage = storageType ===storageEnum.cloud? multer.memoryStorage() :multer
     }
 })
 
-function fileFilter (req:Request, file:Express.Multer.File, cb:FileFilterCallback) {
+const fileFilter =(req:Request, file:Express.Multer.File, cb:FileFilterCallback)=> {
 
-  if(fileTypes.includes(file.mimetype)){
-  cb(null,true)
-  }else{
+  if(!fileTypes.includes(file.mimetype)){
   return cb(new appError ("Invalid file",400))
+  }else{
+  return cb(null,true)
 
   }
 }

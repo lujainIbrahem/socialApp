@@ -6,9 +6,9 @@ export enum GenderType {
 }
 
 export enum RoleType {
-    user = "user",
-    admin = "admin", 
-    superAdmin="superAdmin"
+  user = "user",
+  admin = "admin", 
+  superAdmin="superAdmin"
 }
 
 export enum userProvider  {
